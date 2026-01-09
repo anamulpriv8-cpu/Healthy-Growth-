@@ -2,9 +2,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { UserProfile, FoodItem, DietPlan } from "../types";
 
-// The API key is obtained exclusively from process.env.API_KEY
+// Safe API key extraction
+const getApiKey = () => {
+  try {
+    return process.env.API_KEY || '';
+  } catch (e) {
+    return '';
+  }
+};
+
 const getAIClient = () => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error("API_KEY_MISSING");
   }
@@ -53,7 +61,7 @@ export const analyzeFoodImage = async (base64Data: string, mimeType: string): Pr
 export const generateDietPlan = async (profile: UserProfile): Promise<DietPlan> => {
   const ai = getAIClient();
   
-  const prompt = `Generate a weight loss diet plan for a ${profile.age}y/o ${profile.gender}, weight: ${profile.weight}kg, target: ${profile.targetWeight}kg, activity: ${profile.activityLevel}.`;
+  const prompt = `Generate a weight loss diet plan for a ${profile.age}y/o ${profile.gender}, weight: ${profile.weight}kg, target: ${profile.targetWeight}kg, activity: ${profile.activityLevel}. Format response in Bengali where possible for food names.`;
 
   try {
     const response = await ai.models.generateContent({

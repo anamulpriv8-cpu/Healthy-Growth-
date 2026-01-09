@@ -3,28 +3,35 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// Global error handler for catching runtime issues
-window.onerror = function(message, source, lineno, colno, error) {
-  console.error("Global Error Caught: ", message, error);
-  // If it's a white screen issue, we can at least see something in the console
-};
+// Global error catcher for debugging white screens
+window.addEventListener('error', (event) => {
+  console.error('Runtime Error:', event.error);
+  const root = document.getElementById('root');
+  if (root && (root.innerHTML.includes('app-loader') || root.innerHTML === '')) {
+    root.innerHTML = `
+      <div style="padding: 40px; text-align: center; font-family: sans-serif;">
+        <h2 style="color: #ef4444;">Oops! Something went wrong</h2>
+        <p style="color: #6b7280;">The app failed to load. This is often due to a connection issue or a library loading error.</p>
+        <button onclick="window.location.reload()" style="margin-top: 20px; padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer;">
+          Try Refreshing
+        </button>
+        <pre style="margin-top: 20px; text-align: left; background: #f3f4f6; padding: 15px; border-radius: 8px; font-size: 12px; overflow-x: auto;">${event.message}</pre>
+      </div>
+    `;
+  }
+});
 
 const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
-}
 
-try {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
-} catch (err) {
-  console.error("Render error:", err);
-  rootElement.innerHTML = `<div style="padding: 20px; color: red; font-family: sans-serif;">
-    <h2>App Loading Error</h2>
-    <p>Please check the console for details. This might be due to an API key issue or network error.</p>
-  </div>`;
+if (rootElement) {
+  try {
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
+  } catch (err) {
+    console.error("Mounting error:", err);
+  }
 }
