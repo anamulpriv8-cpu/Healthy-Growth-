@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Scanner from './components/Scanner';
@@ -34,15 +34,20 @@ const App: React.FC = () => {
   const [loggedFoods, setLoggedFoods] = useState<FoodItem[]>([]);
   const [loggedExercises, setLoggedExercises] = useState<ExerciseItem[]>([]);
   const [waterLogs, setWaterLogs] = useState<Record<string, number>>({});
+  const [apiError, setApiError] = useState(false);
 
-  // Utility to get user-specific storage keys
+  useEffect(() => {
+    if (!process.env.API_KEY) {
+      console.error("API Key is missing from environment variables.");
+      setApiError(true);
+    }
+  }, []);
+
   const getUserKey = (base: string) => currentUser ? `hg_${currentUser.id}_${base}` : `hg_guest_${base}`;
 
-  // 1. Load data when currentUser changes
   useEffect(() => {
     if (currentUser) {
-      setIsDataLoaded(false); // Reset loading state for new user
-      
+      setIsDataLoaded(false);
       const p = localStorage.getItem(getUserKey('profile'));
       const f = localStorage.getItem(getUserKey('foods'));
       const e = localStorage.getItem(getUserKey('exercises'));
@@ -52,41 +57,18 @@ const App: React.FC = () => {
       setLoggedFoods(f ? JSON.parse(f) : []);
       setLoggedExercises(e ? JSON.parse(e) : []);
       setWaterLogs(w ? JSON.parse(w) : {});
-      
-      // Mark as loaded so we can start saving updates
       setIsDataLoaded(true);
-      
-      // Ensure session is synced
-      localStorage.setItem('hg_session_user', JSON.stringify(currentUser));
-    } else {
-      setIsDataLoaded(false);
     }
   }, [currentUser?.id]);
 
-  // 2. Persist data only after it's been loaded
   useEffect(() => {
     if (currentUser && isDataLoaded) {
       localStorage.setItem(getUserKey('profile'), JSON.stringify(profile));
-    }
-  }, [profile, currentUser, isDataLoaded]);
-
-  useEffect(() => {
-    if (currentUser && isDataLoaded) {
       localStorage.setItem(getUserKey('foods'), JSON.stringify(loggedFoods));
-    }
-  }, [loggedFoods, currentUser, isDataLoaded]);
-
-  useEffect(() => {
-    if (currentUser && isDataLoaded) {
       localStorage.setItem(getUserKey('exercises'), JSON.stringify(loggedExercises));
-    }
-  }, [loggedExercises, currentUser, isDataLoaded]);
-
-  useEffect(() => {
-    if (currentUser && isDataLoaded) {
       localStorage.setItem(getUserKey('water_logs'), JSON.stringify(waterLogs));
     }
-  }, [waterLogs, currentUser, isDataLoaded]);
+  }, [profile, loggedFoods, loggedExercises, waterLogs, currentUser, isDataLoaded]);
 
   const handleLogin = (user: User) => {
     localStorage.setItem('hg_session_user', JSON.stringify(user));
@@ -100,34 +82,12 @@ const App: React.FC = () => {
     setActiveTab(Tab.Dashboard);
   };
 
-  const handleFoodLogged = (newFoods: FoodItem[]) => {
-    setLoggedFoods(prev => [...prev, ...newFoods]);
-    setActiveTab(Tab.Dashboard);
-  };
-
-  const handleDeleteFood = (id: string) => {
-    setLoggedFoods(prev => prev.filter(f => f.id !== id));
-  };
-
-  const handleUpdateFood = (updatedFood: FoodItem) => {
-    setLoggedFoods(prev => prev.map(f => f.id === updatedFood.id ? updatedFood : f));
-  };
-
   const handleUpdateWater = (amount: number) => {
     const today = new Date().toISOString().split('T')[0];
     setWaterLogs(prev => ({
       ...prev,
       [today]: Math.max(0, (prev[today] || 0) + amount)
     }));
-  };
-
-  const handleAddExercise = (ex: Omit<ExerciseItem, 'id'>) => {
-    const newEx = { ...ex, id: Math.random().toString(36).substr(2, 9) };
-    setLoggedExercises(prev => [...prev, newEx]);
-  };
-
-  const handleDeleteExercise = (id: string) => {
-    setLoggedExercises(prev => prev.filter(e => e.id !== id));
   };
 
   const getWaterHistory = () => {
@@ -137,20 +97,12 @@ const App: React.FC = () => {
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
       const label = i === 0 ? 'Today' : d.toLocaleDateString('en-US', { weekday: 'short' });
-      history.push({
-        name: label,
-        amount: waterLogs[dateStr] || 0
-      });
+      history.push({ name: label, amount: waterLogs[dateStr] || 0 });
     }
     return history;
   };
 
-  const today = new Date().toISOString().split('T')[0];
-  const waterIntakeToday = waterLogs[today] || 0;
-
-  if (!currentUser) {
-    return <Login onLogin={handleLogin} />;
-  }
+  if (!currentUser) return <Login onLogin={handleLogin} />;
 
   const renderContent = () => {
     if (!isDataLoaded) {
@@ -162,31 +114,39 @@ const App: React.FC = () => {
       );
     }
 
-    switch (activeTab) {
-      case Tab.Dashboard:
-        return (
+    return (
+      <>
+        {apiError && (
+          <div className="mx-6 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex gap-3 items-center">
+            <div className="text-amber-500">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <p className="text-xs font-bold text-amber-800">
+              AI features are disabled because the API Key is missing.
+            </p>
+          </div>
+        )}
+        {activeTab === Tab.Dashboard && (
           <Dashboard 
             profile={profile} 
             loggedFoods={loggedFoods} 
             loggedExercises={loggedExercises}
-            waterIntake={waterIntakeToday}
+            waterIntake={waterLogs[new Date().toISOString().split('T')[0]] || 0}
             waterHistory={getWaterHistory()}
-            onDeleteFood={handleDeleteFood}
-            onUpdateFood={handleUpdateFood}
+            onDeleteFood={(id) => setLoggedFoods(f => f.filter(x => x.id !== id))}
+            onUpdateFood={(food) => setLoggedFoods(f => f.map(x => x.id === food.id ? food : x))}
             onUpdateWater={handleUpdateWater}
-            onAddExercise={handleAddExercise}
-            onDeleteExercise={handleDeleteExercise}
+            onAddExercise={(ex) => setLoggedExercises(e => [...e, { ...ex, id: Math.random().toString(36).substr(2, 9) }])}
+            onDeleteExercise={(id) => setLoggedExercises(e => e.filter(x => x.id !== id))}
           />
-        );
-      case Tab.Scanner:
-        return <Scanner onFoodLogged={handleFoodLogged} />;
-      case Tab.DietPlan:
-        return <DietPlanner profile={profile} />;
-      case Tab.Profile:
-        return <Profile profile={profile} setProfile={setProfile} onLogout={handleLogout} />;
-      default:
-        return null;
-    }
+        )}
+        {activeTab === Tab.Scanner && <Scanner onFoodLogged={(newFoods) => { setLoggedFoods(f => [...f, ...newFoods]); setActiveTab(Tab.Dashboard); }} />}
+        {activeTab === Tab.DietPlan && <DietPlanner profile={profile} />}
+        {activeTab === Tab.Profile && <Profile profile={profile} setProfile={setProfile} onLogout={handleLogout} />}
+      </>
+    );
   };
 
   return (
