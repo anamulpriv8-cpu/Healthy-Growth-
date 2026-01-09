@@ -13,6 +13,7 @@
             background-color: #f8fafc;
             margin: 0;
             padding: 0;
+            overflow-x: hidden;
         }
         #app-loader {
             display: flex;
@@ -21,14 +22,17 @@
             justify-content: center;
             height: 100vh;
             background: #ffffff;
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
         }
         .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #10b981;
+            width: 48px;
+            height: 48px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #10b981;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
@@ -50,8 +54,10 @@
     <div id="root">
         <div id="app-loader">
             <div class="spinner"></div>
-            <p style="margin-top: 15px; color: #6b7280; font-weight: 600; font-size: 14px;">Initializing App...</p>
+            <p style="margin-top: 20px; color: #374151; font-weight: 700; font-size: 16px; letter-spacing: -0.025em;">Initializing App...</p>
+            <p style="margin-top: 8px; color: #9ca3af; font-size: 12px;">Please wait while we set up your health companion.</p>
         </div>
     </div>
+    <script type="module" src="index.tsx"></script>
 </body>
 </html>

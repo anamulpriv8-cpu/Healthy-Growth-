@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Scanner from './components/Scanner';
@@ -29,27 +29,25 @@ const App: React.FC = () => {
     }
   });
 
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [loggedFoods, setLoggedFoods] = useState<FoodItem[]>([]);
   const [loggedExercises, setLoggedExercises] = useState<ExerciseItem[]>([]);
   const [waterLogs, setWaterLogs] = useState<Record<string, number>>({});
   const [apiError, setApiError] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Safely check for API Key presence
     const hasApiKey = typeof process !== 'undefined' && process.env && process.env.API_KEY;
     if (!hasApiKey) {
-      console.warn("Gemini API Key is not detected in environment variables.");
       setApiError(true);
     }
   }, []);
 
-  const getUserKey = (base: string) => currentUser ? `hg_${currentUser.id}_${base}` : `hg_guest_${base}`;
+  const getUserKey = useCallback((base: string) => currentUser ? `hg_${currentUser.id}_${base}` : `hg_guest_${base}`, [currentUser]);
 
+  // Load user data once when user changes
   useEffect(() => {
     if (currentUser) {
-      setIsDataLoaded(false);
       try {
         const p = localStorage.getItem(getUserKey('profile'));
         const f = localStorage.getItem(getUserKey('foods'));
@@ -61,34 +59,38 @@ const App: React.FC = () => {
         setLoggedExercises(e ? JSON.parse(e) : []);
         setWaterLogs(w ? JSON.parse(w) : {});
       } catch (e) {
-        console.error("Failed to load user data from storage", e);
+        console.error("Data load failed:", e);
       }
-      setIsDataLoaded(true);
+      setIsReady(true);
+    } else {
+      setIsReady(true); // Ready to show login
     }
-  }, [currentUser?.id]);
+  }, [currentUser, getUserKey]);
 
+  // Save data on changes
   useEffect(() => {
-    if (currentUser && isDataLoaded) {
+    if (currentUser && isReady) {
       try {
         localStorage.setItem(getUserKey('profile'), JSON.stringify(profile));
         localStorage.setItem(getUserKey('foods'), JSON.stringify(loggedFoods));
         localStorage.setItem(getUserKey('exercises'), JSON.stringify(loggedExercises));
         localStorage.setItem(getUserKey('water_logs'), JSON.stringify(waterLogs));
       } catch (e) {
-        console.error("Failed to save user data", e);
+        console.error("Data save failed:", e);
       }
     }
-  }, [profile, loggedFoods, loggedExercises, waterLogs, currentUser, isDataLoaded]);
+  }, [profile, loggedFoods, loggedExercises, waterLogs, currentUser, isReady, getUserKey]);
 
   const handleLogin = (user: User) => {
     localStorage.setItem('hg_session_user', JSON.stringify(user));
     setCurrentUser(user);
+    setIsReady(false); // Trigger reload of data for new user
   };
 
   const handleLogout = () => {
     localStorage.removeItem('hg_session_user');
     setCurrentUser(null);
-    setIsDataLoaded(false);
+    setIsReady(true);
     setActiveTab(Tab.Dashboard);
   };
 
@@ -112,33 +114,21 @@ const App: React.FC = () => {
     return history;
   };
 
+  if (!isReady) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-white">
+        <div className="w-12 h-12 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin"></div>
+        <p className="mt-4 text-gray-500 font-bold text-xs uppercase tracking-widest">Loading Health Data...</p>
+      </div>
+    );
+  }
+
   if (!currentUser) return <Login onLogin={handleLogin} />;
 
   const renderContent = () => {
-    if (!isDataLoaded) {
-      return (
-        <div className="flex flex-col items-center justify-center h-64 space-y-4">
-          <div className="w-12 h-12 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin"></div>
-          <p className="text-gray-400 font-bold text-xs uppercase tracking-widest">Loading Workspace...</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="animate-in fade-in duration-300">
-        {apiError && (
-          <div className="mx-6 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-2xl flex gap-3 items-center">
-            <div className="text-amber-500 shrink-0">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <p className="text-[10px] font-bold text-amber-800">
-              AI features are currently unavailable (Key Missing).
-            </p>
-          </div>
-        )}
-        {activeTab === Tab.Dashboard && (
+    switch (activeTab) {
+      case Tab.Dashboard:
+        return (
           <Dashboard 
             profile={profile} 
             loggedFoods={loggedFoods} 
@@ -151,17 +141,35 @@ const App: React.FC = () => {
             onAddExercise={(ex) => setLoggedExercises(e => [...e, { ...ex, id: Math.random().toString(36).substr(2, 9) }])}
             onDeleteExercise={(id) => setLoggedExercises(e => e.filter(x => x.id !== id))}
           />
-        )}
-        {activeTab === Tab.Scanner && <Scanner onFoodLogged={(newFoods) => { setLoggedFoods(f => [...f, ...newFoods]); setActiveTab(Tab.Dashboard); }} />}
-        {activeTab === Tab.DietPlan && <DietPlanner profile={profile} />}
-        {activeTab === Tab.Profile && <Profile profile={profile} setProfile={setProfile} onLogout={handleLogout} />}
-      </div>
-    );
+        );
+      case Tab.Scanner:
+        return <Scanner onFoodLogged={(newFoods) => { setLoggedFoods(f => [...f, ...newFoods]); setActiveTab(Tab.Dashboard); }} />;
+      case Tab.DietPlan:
+        return <DietPlanner profile={profile} />;
+      case Tab.Profile:
+        return <Profile profile={profile} setProfile={setProfile} onLogout={handleLogout} />;
+      default:
+        return null;
+    }
   };
 
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} userName={currentUser.name}>
-      {renderContent()}
+      <div className="animate-in fade-in duration-300">
+        {apiError && (
+          <div className="mx-6 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-2xl flex gap-3 items-center">
+            <div className="text-amber-500 shrink-0">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <p className="text-[10px] font-bold text-amber-800 uppercase tracking-tight">
+              AI features are offline (Check API Configuration)
+            </p>
+          </div>
+        )}
+        {renderContent()}
+      </div>
     </Layout>
   );
 };
