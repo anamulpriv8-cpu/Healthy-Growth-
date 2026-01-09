@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Healthy Growth - Calorie Tracker & Diet Planner",
+  "description": "An AI-powered health companion to track food calories and generate personalized weight loss diet plans in real-time using Gemini.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
